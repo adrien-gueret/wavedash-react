@@ -5,6 +5,7 @@ import type {
   LeaderboardDisplayType,
   Id,
   LeaderboardEntries,
+  UpsertedLeaderboardEntry,
 } from "@wvdsh/sdk-js";
 
 import { useWavedash } from "./WavedashProvider";
@@ -16,7 +17,7 @@ export type UseLeaderBoardReturnValue = {
     score: number,
     keepBest?: boolean,
     ugcId?: Id<"userGeneratedContent">,
-  ) => Promise<number | null>;
+  ) => Promise<UpsertedLeaderboardEntry | null>;
   getEntryCount: () => number;
   getEntries: (
     start: number,
@@ -77,7 +78,7 @@ export function useLeaderboard(
       score: number,
       keepBest: boolean = true,
       ugcId?: Id<"userGeneratedContent">,
-    ): Promise<number | null> => {
+    ): Promise<UpsertedLeaderboardEntry | null> => {
       if (!isRunningInWavedash || !leaderboardId) {
         return null;
       }
@@ -89,7 +90,7 @@ export function useLeaderboard(
         ugcId,
       );
 
-      return response.success ? response.data.globalRank : null;
+      return response.success ? response.data : null;
     },
     [isRunningInWavedash, leaderboardId, wavedash],
   );
