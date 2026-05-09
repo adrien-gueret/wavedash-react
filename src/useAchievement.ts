@@ -7,7 +7,7 @@ export type UseAchievementReturnValue = [
   unlock: (storeNow?: boolean) => boolean,
 ];
 
-export default function useAchievement(
+export function useAchievement(
   achievementName: string,
 ): UseAchievementReturnValue {
   const { isRunningInWavedash, wavedash } = useWavedash();

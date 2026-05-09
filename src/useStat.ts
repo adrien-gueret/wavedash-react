@@ -7,7 +7,7 @@ export type UseStatReturnValue = [
   (newValue: number, storeNow?: boolean) => boolean,
 ];
 
-export default function useStat(statName: string): UseStatReturnValue {
+export function useStat(statName: string): UseStatReturnValue {
   const { isRunningInWavedash, wavedash } = useWavedash();
 
   const [statValue, setStatValue] = useState<number | null>(null);
