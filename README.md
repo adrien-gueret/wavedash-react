@@ -213,7 +213,3 @@ export function AchievementHandler() {
   );
 }
 ```
-
-## License
-
-MIT
