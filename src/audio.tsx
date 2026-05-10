@@ -18,11 +18,13 @@ export type AudioContextValue = {
   toggleSounds: (force?: boolean) => boolean;
   toggleMusic: (force?: boolean) => boolean;
   toggleAudio: (force?: boolean) => boolean;
+  playSound: (audioId: string, loop?: boolean) => void;
+  stopSound: (audioId: string) => void;
   playMusic: (musicId: string) => void;
   pauseMusic: () => void;
   resumeMusic: () => void;
-  setSoundsVolume: React.Dispatch<React.SetStateAction<number>>;
-  setMusicVolume: React.Dispatch<React.SetStateAction<number>>;
+  setSoundsVolume: (value: number) => void;
+  setMusicVolume: (value: number) => void;
 };
 
 const AudioContext = createContext<AudioContextValue>({
@@ -35,6 +37,8 @@ const AudioContext = createContext<AudioContextValue>({
   toggleSounds: () => false,
   toggleMusic: () => false,
   toggleAudio: () => false,
+  playSound: () => {},
+  stopSound: () => {},
   playMusic: () => {},
   pauseMusic: () => {},
   resumeMusic: () => {},
@@ -50,32 +54,33 @@ export type AudioProviderProps = {
 export function AudioProvider({ children, audioMap }: AudioProviderProps) {
   const [areSoundsEnabled, setAreSoundsEnabled] = useState(false);
   const [isMusicEnabled, setIsMusicEnabled] = useState(false);
-  const [soundsVolume, setSoundsVolume] = useState(1);
-  const [musicVolume, setMusicVolume] = useState(1);
+  const [soundsVolume, setSoundsVolumeState] = useState(1);
+  const [musicVolume, setMusicVolumeState] = useState(1);
   const currentMusicRef = useRef<HTMLAudioElement | null>(null);
   const shouldResumeMusicRef = useRef(false);
 
+  const areSoundsEnabledRef = useRef(areSoundsEnabled);
+  const isMusicEnabledRef = useRef(isMusicEnabled);
+  const soundsVolumeRef = useRef(soundsVolume);
+  const musicVolumeRef = useRef(musicVolume);
+
   const isAudioEnabled = useCallback(() => {
-    return areSoundsEnabled || isMusicEnabled;
-  }, [areSoundsEnabled, isMusicEnabled]);
+    return areSoundsEnabledRef.current || isMusicEnabledRef.current;
+  }, []);
 
-  const toggleSounds = useCallback(
-    (force?: boolean) => {
-      const newValue = force !== undefined ? force : !areSoundsEnabled;
-      setAreSoundsEnabled(newValue);
-      return newValue;
-    },
-    [areSoundsEnabled],
-  );
+  const toggleSounds = useCallback((force?: boolean) => {
+    const newValue = force !== undefined ? force : !areSoundsEnabledRef.current;
+    areSoundsEnabledRef.current = newValue;
+    setAreSoundsEnabled(newValue);
+    return newValue;
+  }, []);
 
-  const toggleMusic = useCallback(
-    (force?: boolean) => {
-      const newValue = force !== undefined ? force : !isMusicEnabled;
-      setIsMusicEnabled(newValue);
-      return newValue;
-    },
-    [isMusicEnabled],
-  );
+  const toggleMusic = useCallback((force?: boolean) => {
+    const newValue = force !== undefined ? force : !isMusicEnabledRef.current;
+    isMusicEnabledRef.current = newValue;
+    setIsMusicEnabled(newValue);
+    return newValue;
+  }, []);
 
   const toggleAudio = useCallback(
     (force?: boolean) => {
@@ -87,15 +92,55 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
     [isAudioEnabled, toggleSounds, toggleMusic],
   );
 
-  const playMusic = useCallback(
-    (musicId: string) => {
-      if (!isMusicEnabled) {
+  const setSoundsVolume = useCallback((value: number) => {
+    soundsVolumeRef.current = value;
+    setSoundsVolumeState(value);
+  }, []);
+
+  const setMusicVolume = useCallback((value: number) => {
+    musicVolumeRef.current = value;
+    setMusicVolumeState(value);
+  }, []);
+
+  const playSound = useCallback(
+    (audioId: string, loop: boolean = false) => {
+      if (!areSoundsEnabledRef.current) {
         return;
       }
 
-      if (currentMusicRef.current) {
-        currentMusicRef.current.pause();
-        currentMusicRef.current.currentTime = 0;
+      const audio = audioMap.get(audioId);
+      if (!audio) {
+        console.warn(`Audio with id "${audioId}" not found.`);
+        return;
+      }
+
+      audio.volume = soundsVolumeRef.current;
+      audio.loop = loop;
+      audio.currentTime = 0;
+      audio.play().catch((error) => {
+        console.error(`Failed to play sound "${audioId}":`, error);
+      });
+    },
+    [audioMap],
+  );
+
+  const stopSound = useCallback(
+    (audioId: string) => {
+      const audio = audioMap.get(audioId);
+      if (!audio) {
+        return;
+      }
+
+      audio.pause();
+      audio.currentTime = 0;
+    },
+    [audioMap],
+  );
+
+  const playMusic = useCallback(
+    (musicId: string) => {
+      if (!isMusicEnabledRef.current) {
+        return;
       }
 
       const audio = audioMap.get(musicId);
@@ -104,7 +149,18 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
         return;
       }
 
-      audio.volume = musicVolume;
+      // If the requested track is already the current one and still playing,
+      // don't restart it.
+      if (currentMusicRef.current === audio && !audio.paused) {
+        return;
+      }
+
+      if (currentMusicRef.current && currentMusicRef.current !== audio) {
+        currentMusicRef.current.pause();
+        currentMusicRef.current.currentTime = 0;
+      }
+
+      audio.volume = musicVolumeRef.current;
       audio.loop = true;
       audio.currentTime = 0;
       audio.play().catch((error) => {
@@ -114,7 +170,7 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
       shouldResumeMusicRef.current = false;
       currentMusicRef.current = audio;
     },
-    [audioMap, isMusicEnabled, musicVolume],
+    [audioMap],
   );
 
   const pauseMusic = useCallback(() => {
@@ -125,7 +181,7 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
   }, []);
 
   const resumeMusic = useCallback(() => {
-    if (!isMusicEnabled) {
+    if (!isMusicEnabledRef.current) {
       return;
     }
 
@@ -135,7 +191,7 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
       });
       shouldResumeMusicRef.current = false;
     }
-  }, [isMusicEnabled]);
+  }, []);
 
   useEffect(() => {
     const currentMusic = currentMusicRef.current;
@@ -171,6 +227,8 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
         toggleSounds,
         toggleMusic,
         toggleAudio,
+        playSound,
+        stopSound,
         playMusic,
         pauseMusic,
         resumeMusic,
@@ -191,55 +249,30 @@ export function useAudio(): AudioContextValue {
 }
 
 export function useSound(audioId: string) {
-  const { audioMap, areSoundsEnabled, soundsVolume } = useAudio();
-
-  const getAudio = useCallback(() => {
-    const audio = audioMap.get(audioId);
-
-    if (!audio) {
-      console.warn(`Audio with id "${audioId}" not found.`);
-      return null;
-    }
-
-    return audio;
-  }, [audioId, audioMap]);
+  const { playSound: playSoundFromContext, stopSound: stopSoundFromContext } =
+    useAudio();
 
   const playSound = useCallback(
     (loop: boolean = false) => {
-      if (!areSoundsEnabled) {
-        return;
-      }
-
-      const audio = getAudio();
-      if (!audio) {
-        return;
-      }
-
-      audio.volume = soundsVolume;
-      audio.loop = loop;
-      audio.currentTime = 0;
-      audio.play().catch((error) => {
-        console.error(`Failed to play sound "${audioId}":`, error);
-      });
+      playSoundFromContext(audioId, loop);
     },
-    [audioId, areSoundsEnabled, getAudio, soundsVolume],
+    [playSoundFromContext, audioId],
   );
 
   const stopSound = useCallback(() => {
-    const audio = getAudio();
-    if (!audio) {
-      return;
-    }
+    stopSoundFromContext(audioId);
+  }, [stopSoundFromContext, audioId]);
 
-    audio.pause();
-    audio.currentTime = 0;
-  }, [getAudio]);
+  return { playSound, stopSound };
+}
+
+export function useSounds() {
+  const { playSound, stopSound } = useAudio();
 
   return { playSound, stopSound };
 }
 
 export function useMusic() {
   const { playMusic, pauseMusic, resumeMusic } = useAudio();
-
   return { playMusic, pauseMusic, resumeMusic };
 }
