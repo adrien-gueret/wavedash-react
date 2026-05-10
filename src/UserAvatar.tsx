@@ -9,7 +9,7 @@ export type UserAvatarProps = {
   defaultAvatar?: ReactNode;
 };
 
-export default function UserAvatar({
+export function UserAvatar({
   userId,
   size,
   defaultAvatar = null,

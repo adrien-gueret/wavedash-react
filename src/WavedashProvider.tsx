@@ -30,7 +30,7 @@ export type WavedashProviderProps = {
   config?: WavedashConfig;
 };
 
-export default function WavedashProvider({
+export function WavedashProvider({
   children,
   preload,
   config,

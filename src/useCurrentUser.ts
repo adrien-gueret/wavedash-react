@@ -1,6 +1,6 @@
 import { useWavedash } from "./WavedashProvider";
 
-export default function useCurrentUser() {
+export function useCurrentUser() {
   const { isRunningInWavedash, wavedash } = useWavedash();
 
   if (!isRunningInWavedash) {
