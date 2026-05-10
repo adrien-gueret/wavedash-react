@@ -54,16 +54,16 @@ export function WavedashProvider({
   const init = useCallback(() => {
     setIsInit(true);
 
-    if (isInit || !contextValue.isRunningInWavedash) {
+    if (!contextValue.isRunningInWavedash) {
       return;
     }
 
     contextValue.wavedash.updateLoadProgressZeroToOne(1);
     contextValue.wavedash.init(config);
-  }, [contextValue, config, isInit, preload]);
+  }, [contextValue, config]);
 
   useEffect(() => {
-    if (isInit || !contextValue.isRunningInWavedash) {
+    if (isInit) {
       return;
     }
 
@@ -78,9 +78,13 @@ export function WavedashProvider({
 
     const handleAssetLoad = () => {
       loadedCount += 1;
-      contextValue.wavedash.updateLoadProgressZeroToOne(
-        loadedCount / totalCount,
-      );
+
+      if (contextValue.isRunningInWavedash) {
+        contextValue.wavedash.updateLoadProgressZeroToOne(
+          loadedCount / totalCount,
+        );
+      }
+
       if (loadedCount === totalCount) {
         init();
       }
