@@ -9,6 +9,8 @@ import {
 } from "react";
 import type { WavedashSDK, WavedashConfig } from "@wvdsh/sdk-js";
 
+import { AudioProvider } from "./audio";
+
 export type WavedashContextValue =
   | {
       isRunningInWavedash: true;
@@ -26,7 +28,11 @@ const WavedashContext = createContext<WavedashContextValue>({
 
 export type WavedashProviderProps = {
   children: ReactNode;
-  preload?: Partial<Record<"audio" | "image" | "video", string[]>>;
+  preload?: {
+    audio?: Record<string, string | string[]>;
+    images?: string[];
+    videos?: string[];
+  };
   config?: WavedashConfig;
 };
 
@@ -36,6 +42,7 @@ export function WavedashProvider({
   config,
 }: WavedashProviderProps) {
   const [isInit, setIsInit] = useState(false);
+  const [audioMap] = useState(() => new Map<string, HTMLAudioElement>());
 
   const contextValue: WavedashContextValue = useMemo(
     () =>
@@ -67,14 +74,19 @@ export function WavedashProvider({
       return;
     }
 
-    const { audio = [], image = [], video = [] } = preload ?? {};
-    const totalCount = audio.length + image.length + video.length;
+    const { audio = {}, images = [], videos = [] } = preload ?? {};
+    const audioEntries = Object.entries(audio);
+    const totalCount = audioEntries.length + images.length + videos.length;
     let loadedCount = 0;
 
     if (totalCount === 0) {
       init();
       return;
     }
+
+    const preloadContainer = document.createElement("div");
+    preloadContainer.style.display = "none";
+    document.body.appendChild(preloadContainer);
 
     const handleAssetLoad = () => {
       loadedCount += 1;
@@ -90,35 +102,62 @@ export function WavedashProvider({
       }
     };
 
-    audio.forEach((src) => {
-      const audioElement = new Audio(src);
+    audioEntries.forEach(([name, src]) => {
+      const audioElement = new Audio();
+
+      if (Array.isArray(src)) {
+        src.forEach((srcUrl) => {
+          const sourceElement = document.createElement("source");
+          sourceElement.src = srcUrl;
+
+          if (srcUrl.endsWith(".mp3")) {
+            sourceElement.type = "audio/mpeg";
+          } else if (srcUrl.endsWith(".ogg")) {
+            sourceElement.type = "audio/ogg";
+          } else if (srcUrl.endsWith(".wav")) {
+            sourceElement.type = "audio/wav";
+          } else if (srcUrl.endsWith(".webm")) {
+            sourceElement.type = "audio/webm";
+          }
+          audioElement.appendChild(sourceElement);
+        });
+      } else {
+        audioElement.src = src;
+      }
+
       audioElement.addEventListener("canplaythrough", handleAssetLoad, {
         once: true,
       });
       audioElement.addEventListener("error", handleAssetLoad, { once: true });
+      audioMap.set(name, audioElement);
+      preloadContainer.appendChild(audioElement);
     });
 
-    image.forEach((src) => {
+    images.forEach((src) => {
       const img = new Image();
       img.src = src;
       img.addEventListener("load", handleAssetLoad, { once: true });
       img.addEventListener("error", handleAssetLoad, { once: true });
+      preloadContainer.appendChild(img);
     });
 
-    video.forEach((src) => {
+    videos.forEach((src) => {
       const videoElement = document.createElement("video");
       videoElement.src = src;
       videoElement.addEventListener("canplaythrough", handleAssetLoad, {
         once: true,
       });
       videoElement.addEventListener("error", handleAssetLoad, { once: true });
+      preloadContainer.appendChild(videoElement);
     });
-  }, [isInit, preload, contextValue]);
+  }, [isInit, preload, contextValue, audioMap]);
 
   return (
-    <WavedashContext.Provider value={contextValue}>
-      {isInit ? children : null}
-    </WavedashContext.Provider>
+    <WavedashContext value={contextValue}>
+      <AudioProvider audioMap={audioMap}>
+        {isInit ? children : null}
+      </AudioProvider>
+    </WavedashContext>
   );
 }
 
