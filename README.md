@@ -214,11 +214,17 @@ Sound effects and music are disabled by default. Enable them through `useAudio()
 
 - `areSoundsEnabled`
 - `isMusicEnabled`
+- `isAudioEnabled()`
 - `soundsVolume`
 - `musicVolume`
 - `toggleSounds(force?)`
 - `toggleMusic(force?)`
 - `toggleAudio(force?)`
+- `playSound(audioId, loop?)`
+- `stopSound(audioId)`
+- `playMusic(musicId)`
+- `pauseMusic()`
+- `resumeMusic()`
 - `setSoundsVolume(value)`
 - `setMusicVolume(value)`
 
@@ -229,8 +235,10 @@ export function AudioSettings() {
   const {
     areSoundsEnabled,
     isMusicEnabled,
+    isAudioEnabled,
     toggleSounds,
     toggleMusic,
+    playSound,
     soundsVolume,
     musicVolume,
     setSoundsVolume,
@@ -245,6 +253,8 @@ export function AudioSettings() {
       <button onClick={() => toggleMusic()}>
         Music: {isMusicEnabled ? "on" : "off"}
       </button>
+      <button onClick={() => playSound("click")}>Play click</button>
+      <p>Any audio enabled: {isAudioEnabled() ? "yes" : "no"}</p>
       <button onClick={() => setSoundsVolume(0.5)}>
         SFX volume: {soundsVolume}
       </button>
@@ -296,6 +306,28 @@ export function ShootButton() {
 }
 ```
 
+### useSounds
+
+`useSounds()` returns global sound controls (not bound to a single id).
+
+```tsx
+import { useSounds } from "wavedash-react";
+
+export function GenericSfxButtons() {
+  const { playSound, stopSound } = useSounds();
+
+  return (
+    <div>
+      <button onClick={() => playSound("click")}>Play click</button>
+      <button onClick={() => playSound("explosion", true)}>
+        Loop explosion
+      </button>
+      <button onClick={() => stopSound("explosion")}>Stop explosion</button>
+    </div>
+  );
+}
+```
+
 ### useMusic
 
 `useMusic()` controls the shared music player for the whole app.
@@ -318,6 +350,7 @@ export function MusicControls() {
 ```
 
 Only one music track can play at a time. Starting a new one stops the previous track first.
+If you call `playMusic()` with the same track already playing, it is ignored (the track is not restarted from 0).
 
 ## Stats
 
