@@ -34,12 +34,16 @@ export type WavedashProviderProps = {
     videos?: string[];
   };
   config?: WavedashConfig;
+  defaultSoundsVolume?: number;
+  defaultMusicVolume?: number;
 };
 
 export function WavedashProvider({
   children,
   preload,
   config,
+  defaultSoundsVolume,
+  defaultMusicVolume,
 }: WavedashProviderProps) {
   const [isInit, setIsInit] = useState(false);
   const [audioMap] = useState(() => new Map<string, HTMLAudioElement>());
@@ -154,7 +158,11 @@ export function WavedashProvider({
 
   return (
     <WavedashContext value={contextValue}>
-      <AudioProvider audioMap={audioMap}>
+      <AudioProvider
+        audioMap={audioMap}
+        defaultSoundsVolume={defaultSoundsVolume}
+        defaultMusicVolume={defaultMusicVolume}
+      >
         {isInit ? children : null}
       </AudioProvider>
     </WavedashContext>

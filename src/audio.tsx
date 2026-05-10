@@ -49,13 +49,20 @@ const AudioContext = createContext<AudioContextValue>({
 export type AudioProviderProps = {
   children: ReactNode;
   audioMap: Map<string, HTMLAudioElement>;
+  defaultSoundsVolume?: number;
+  defaultMusicVolume?: number;
 };
 
-export function AudioProvider({ children, audioMap }: AudioProviderProps) {
+export function AudioProvider({
+  children,
+  audioMap,
+  defaultSoundsVolume = 1,
+  defaultMusicVolume = 1,
+}: AudioProviderProps) {
   const [areSoundsEnabled, setAreSoundsEnabled] = useState(false);
   const [isMusicEnabled, setIsMusicEnabled] = useState(false);
-  const [soundsVolume, setSoundsVolumeState] = useState(1);
-  const [musicVolume, setMusicVolumeState] = useState(1);
+  const [soundsVolume, setSoundsVolumeState] = useState(defaultSoundsVolume);
+  const [musicVolume, setMusicVolumeState] = useState(defaultMusicVolume);
   const currentMusicRef = useRef<HTMLAudioElement | null>(null);
   const shouldResumeMusicRef = useRef(false);
 
@@ -149,8 +156,6 @@ export function AudioProvider({ children, audioMap }: AudioProviderProps) {
         return;
       }
 
-      // If the requested track is already the current one and still playing,
-      // don't restart it.
       if (currentMusicRef.current === audio && !audio.paused) {
         return;
       }
