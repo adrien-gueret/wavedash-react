@@ -1,6 +1,6 @@
 {
   "name": "wavedash-react",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "React wrapper for Wavedash",
   "main": "./dist/index.cjs",
   "scripts": {
