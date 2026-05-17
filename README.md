@@ -54,9 +54,9 @@ export function App() {
 
 For audio arrays, the browser chooses the first supported source, just like a regular `<audio>` element with multiple `<source>` tags.
 
-## Core Hooks
+## Foundation APIs
 
-### useWavedash
+### Runtime: useWavedash
 
 Access the Wavedash context to check if your game is running inside Wavedash:
 
@@ -76,7 +76,7 @@ export function GameComponent() {
 
 You can access the [native Wavedash SDK](https://docs.wavedash.com/sdk/functions) via the `wavedash` object. It exposes all SDK features directly, so if a capability is not wrapped yet by `wavedash-react`, you can still use it through this object.
 
-### useCurrentUser
+### Identity: useCurrentUser
 
 Get the current logged-in user:
 
@@ -90,7 +90,7 @@ export function UserProfile() {
 }
 ```
 
-### UserAvatar
+### Identity: UserAvatar
 
 A React component for displaying a user's avatar:
 
@@ -106,7 +106,211 @@ export function OtherPlayerAvatar() {
 }
 ```
 
-## Leaderboards
+## State Management
+
+The library includes a small typed state layer built around two optional state domains:
+
+- `ui`: ephemeral UI/runtime state (modals, local view state, temporary flags)
+- `persistent`: state that can be saved and loaded through Wavedash
+
+### Define State And Context
+
+```tsx
+import { createStateContext, defineState } from "wavedash-react";
+
+const uiState = defineState({
+  initialState: {
+    isMenuOpen: false,
+    selectedTab: "inventory" as "inventory" | "stats",
+  },
+  actions: {
+    openMenu: (currentState) => ({ ...currentState, isMenuOpen: true }),
+    closeMenu: (currentState) => ({ ...currentState, isMenuOpen: false }),
+    selectTab: (currentState, newSelectedTab) => ({
+      ...currentState,
+      selectedTab: newSelectedTab,
+    }),
+  },
+});
+
+const persistentState = defineState({
+  initialState: {
+    coins: 0,
+    healthPoints: 100,
+    maxHealthPoints: 100,
+  },
+  actions: {
+    addCoins: (currentState, amount) => ({
+      ...currentState,
+      coins: currentState.coins + amount,
+    }),
+    heal: (currentState, healAmount) => ({
+      ...currentState,
+      healthPoints: Math.min(
+        currentState.healthPoints + healAmount,
+        currentState.maxHealthPoints,
+      ),
+    }),
+  },
+});
+
+export const {
+  StateProvider,
+  useUiSelector,
+  useUiActions,
+  usePersistentSelector,
+  usePersistentActions,
+  usePersistentMeta,
+  usePersistentControls,
+} = createStateContext({
+  ui: uiState,
+  persistent: persistentState,
+});
+```
+
+You can create a context with only `ui`, only `persistent`, or both.
+
+### Mount The Provider
+
+`StateProvider` must be rendered under `WavedashProvider`.
+
+```tsx
+import { WavedashProvider } from "wavedash-react";
+import { StateProvider } from "./gameState";
+
+export function App() {
+  return (
+    <WavedashProvider>
+      <StateProvider
+        saveOptions={{
+          fileName: "main",
+          autoLoad: true,
+          autoSave: true,
+          autoSaveDebounceMs: 500,
+        }}
+      >
+        <YourGame />
+      </StateProvider>
+    </WavedashProvider>
+  );
+}
+```
+
+`saveOptions` and all its properties are **optional**:
+
+- `fileName`: the name of the file where the data will be saved. Usefull if you want your game to have multiple save slots. Default to `"main"`.
+- `autoLoad`: if `true`, the initial state will be automatically loaded from the one found on the save file. Default to `false`.
+- `autoSave`: if `true`, each action performed on the persistent state will be saved on Wavedash. Default to `false`.
+- `autoSaveDebounceMs`: a delay to avoid calling the Wavedash saving system too often. Default to `500`.
+
+### Read And Update State
+
+Actions are synchronous and return the new state, so you can use the result immediately if needed:
+
+```tsx
+import {
+  useUiActions,
+  useUiSelector,
+  usePersistentActions,
+  usePersistentSelector,
+} from "./gameState";
+
+export function Hud() {
+  const isMenuOpen = useUiSelector((s) => s.isMenuOpen);
+  const coins = usePersistentSelector((s) => s.coins);
+
+  const { openMenu, closeMenu } = useUiActions();
+  const { addCoins } = usePersistentActions();
+
+  return (
+    <div>
+      <p>Menu: {isMenuOpen ? "open" : "closed"}</p>
+      <p>Coins: {coins}</p>
+      <button onClick={openMenu}>Open menu</button>
+      <button onClick={closeMenu}>Close menu</button>
+      <button onClick={() => {
+        const newState = addCoins(10);
+        console.log("New coin count:", newState.coins);
+      }}>+10 coins</button>
+    </div>
+  );
+}
+```
+
+### Selector Variants: Default vs Shallow
+
+Use the regular selector hooks when you read a single primitive value:
+
+```tsx
+const coins = usePersistentSelector((s) => s.coins);
+const isMenuOpen = useUiSelector((s) => s.isMenuOpen);
+```
+
+Use the `Shallow` variants when your selector returns an object or an array created on the fly:
+
+```tsx
+const hud = useUiSelectorShallow((s) => ({
+  isMenuOpen: s.isMenuOpen,
+  selectedTab: s.selectedTab,
+}));
+```
+
+Why this matters:
+
+- `useUiSelector` and `usePersistentSelector` compare the selected value with `Object.is`.
+- If your selector returns a new object on every render, `Object.is` sees it as different, even when the contained values did not change, and it'll trigger a new render.
+- `useUiSelectorShallow` and `usePersistentSelectorShallow` avoid that by comparing the first-level keys and values instead.
+
+Rule of thumb:
+
+- primitive result: use the regular selector hooks
+- object or array result: use the `Shallow` variants
+- custom comparison logic: use `useUiSelector` / `usePersistentSelector` with your own equality function
+
+### Persistent Meta And Controls
+
+Use persistent controls for explicit save/load, and persistent meta to drive UI feedback.
+
+`usePersistentMeta()` returns:
+
+- `loadStatus`: `"idle"` | `"loading"` | `"ready"` | `"error"`
+- `isSaving`: `boolean`
+- `error`: the error object if the last load or save failed, `null` otherwise
+
+```tsx
+import { usePersistentControls, usePersistentMeta } from "./gameState";
+
+export function SaveStatus() {
+  const { loadStatus, isSaving, error } = usePersistentMeta();
+  const { saveNow, load } = usePersistentControls();
+
+  if (loadStatus === "loading") return <p>Loading save...</p>;
+  if (loadStatus === "error") return <p>Failed to load save</p>;
+
+  return (
+    <div>
+      <p>Save loaded: {loadStatus === "ready" ? "yes" : "no"}</p>
+      <p>Saving: {isSaving ? "yes" : "no"}</p>
+      <button onClick={() => saveNow()}>Save now</button>
+      <button onClick={() => load()}>Load now</button>
+    </div>
+  );
+}
+```
+
+When `autoSave` is enabled, persistent actions schedule a debounced save automatically. Auto-save is held back until the initial load completes, preventing the initial state from overwriting a previous save on page reload.
+
+### Save Fallback
+
+When the game is not running inside Wavedash (`isRunningInWavedash === false`), the save system falls back to `localStorage` transparently. This means:
+
+- Developers can test locally without the Wavedash environment.
+- The same `saveOptions` and hooks work in both contexts.
+- No code changes are needed — the fallback is automatic.
+
+## Game Features
+
+### Leaderboards
 
 Three hooks handle different leaderboard scenarios:
 
@@ -202,7 +406,7 @@ The `submitScore` method accepts:
 
 Returns the created or updated leaderboard entry, or `null` if submission failed.
 
-## Audio
+### Audio
 
 The library also exposes helpers to control sound effects and music from the assets preloaded in `WavedashProvider`.
 
@@ -352,7 +556,7 @@ export function MusicControls() {
 Only one music track can play at a time. Starting a new one stops the previous track first.
 If you call `playMusic()` with the same track already playing, it is ignored (the track is not restarted from 0).
 
-## Stats
+### Stats
 
 Track custom game stats:
 
@@ -377,7 +581,7 @@ export function StatsDisplay() {
 - current stat value as `number | null`
 - `setStat(newValue, storeNow?)`
 
-## Achievements
+### Achievements
 
 Display and unlock achievements:
 
