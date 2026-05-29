@@ -37,6 +37,12 @@ async function loadFromWavedash<T extends State>(
 ): Promise<T | null> {
   const fullPath = `${rootSavePath}${fileName}.json`;
 
+  const doesSaveExist = await wavedash.remoteFileExists(fullPath);
+
+  if (!doesSaveExist.success || !doesSaveExist.data) {
+    return null;
+  }
+
   const downloadResult = await wavedash.downloadRemoteFile(fullPath);
   if (!downloadResult?.success) {
     throw new Error(`Failed to download save file at path: ${fullPath}`);
