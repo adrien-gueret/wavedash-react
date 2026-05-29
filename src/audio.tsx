@@ -8,6 +8,8 @@ import {
   useRef,
 } from "react";
 
+import { useWavedash } from "./WavedashProvider";
+
 export type AudioContextValue = {
   areSoundsEnabled: boolean;
   isMusicEnabled: boolean;
@@ -59,6 +61,7 @@ export function AudioProvider({
   defaultSoundsVolume = 1,
   defaultMusicVolume = 1,
 }: AudioProviderProps) {
+  const { wavedash } = useWavedash();
   const [areSoundsEnabled, setAreSoundsEnabled] = useState(false);
   const [isMusicEnabled, setIsMusicEnabled] = useState(false);
   const [soundsVolume, setSoundsVolumeState] = useState(defaultSoundsVolume);
@@ -222,6 +225,21 @@ export function AudioProvider({
     });
     shouldResumeMusicRef.current = false;
   }, [isMusicEnabled, musicVolume]);
+
+  useEffect(() => {
+    if (!wavedash) {
+      return;
+    }
+
+    const unsubscribe = wavedash.on(
+      wavedash.Events.MUTE_CHANGED,
+      ({ isMuted }) => {
+        toggleAudio(!isMuted);
+      },
+    );
+
+    return unsubscribe;
+  }, [wavedash]);
 
   return (
     <AudioContext
