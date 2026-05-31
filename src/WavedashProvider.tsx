@@ -6,6 +6,7 @@ import {
   useMemo,
   useCallback,
   useState,
+  useRef,
 } from "react";
 import type { WavedashSDK, WavedashConfig } from "@wvdsh/sdk-js";
 
@@ -45,6 +46,7 @@ export function WavedashProvider({
   defaultSoundsVolume,
   defaultMusicVolume,
 }: WavedashProviderProps) {
+  const hasStartedPreload = useRef(false);
   const [isInit, setIsInit] = useState(false);
   const [audioMap] = useState(() => new Map<string, HTMLAudioElement>());
 
@@ -74,9 +76,11 @@ export function WavedashProvider({
   }, [contextValue, config]);
 
   useEffect(() => {
-    if (isInit) {
+    if (isInit || hasStartedPreload.current) {
       return;
     }
+
+    hasStartedPreload.current = true;
 
     const { audio = {}, images = [], videos = [] } = preload ?? {};
     const audioEntries = Object.entries(audio);
