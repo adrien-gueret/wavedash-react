@@ -39,6 +39,26 @@ export type WavedashProviderProps = {
   defaultMusicVolume?: number;
 };
 
+const ASSETS_PRELOAD_TIMEOUT_MS = 5000;
+
+function createAssetSettler(onSettled: () => void): () => void {
+  let isSettled = false;
+  let timeoutId = -1;
+
+  const settleAsset = () => {
+    if (isSettled) {
+      return;
+    }
+
+    isSettled = true;
+    window.clearTimeout(timeoutId);
+    onSettled();
+  };
+
+  timeoutId = window.setTimeout(settleAsset, ASSETS_PRELOAD_TIMEOUT_MS);
+  return settleAsset;
+}
+
 export function WavedashProvider({
   children,
   preload,
@@ -112,6 +132,8 @@ export function WavedashProvider({
 
     audioEntries.forEach(([name, src]) => {
       const audioElement = new Audio();
+      audioElement.preload = "metadata";
+      const settleAsset = createAssetSettler(handleAssetLoad);
 
       if (Array.isArray(src)) {
         src.forEach((srcUrl) => {
@@ -133,10 +155,13 @@ export function WavedashProvider({
         audioElement.src = src;
       }
 
-      audioElement.addEventListener("canplaythrough", handleAssetLoad, {
+      audioElement.addEventListener("loadedmetadata", settleAsset, {
         once: true,
       });
-      audioElement.addEventListener("error", handleAssetLoad, { once: true });
+      audioElement.addEventListener("error", settleAsset, { once: true });
+
+      audioElement.load();
+
       audioMap.set(name, audioElement);
       preloadContainer.appendChild(audioElement);
     });
@@ -144,21 +169,29 @@ export function WavedashProvider({
     images.forEach((src) => {
       const img = new Image();
       img.src = src;
-      img.addEventListener("load", handleAssetLoad, { once: true });
-      img.addEventListener("error", handleAssetLoad, { once: true });
+      const settleAsset = createAssetSettler(handleAssetLoad);
+
+      img.addEventListener("load", settleAsset, { once: true });
+      img.addEventListener("error", settleAsset, { once: true });
       preloadContainer.appendChild(img);
     });
 
     videos.forEach((src) => {
       const videoElement = document.createElement("video");
+      videoElement.preload = "metadata";
       videoElement.src = src;
-      videoElement.addEventListener("canplaythrough", handleAssetLoad, {
+      const settleAsset = createAssetSettler(handleAssetLoad);
+
+      videoElement.addEventListener("loadedmetadata", settleAsset, {
         once: true,
       });
-      videoElement.addEventListener("error", handleAssetLoad, { once: true });
+      videoElement.addEventListener("error", settleAsset, { once: true });
+
+      videoElement.load();
+
       preloadContainer.appendChild(videoElement);
     });
-  }, [isInit, preload, contextValue, audioMap]);
+  }, [isInit, preload, contextValue, audioMap, init]);
 
   return (
     <WavedashContext value={contextValue}>
