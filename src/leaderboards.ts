@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   Leaderboard,
   LeaderboardSortOrder,
@@ -18,7 +18,7 @@ export type UseLeaderBoardReturnValue = {
     keepBest?: boolean,
     ugcId?: Id<"userGeneratedContent">,
   ) => Promise<UpsertedLeaderboardEntry | null>;
-  getEntryCount: () => number;
+  getEntryCount: () => Promise<number>;
   getEntries: (
     start: number,
     count: number,
@@ -43,6 +43,9 @@ export function useLeaderboard(
 ): UseLeaderBoardReturnValue {
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const onLeaderboardLoadedCallbacks = useRef<
+    ((leaderboard: Leaderboard) => void)[]
+  >([]);
   const { isRunningInWavedash, wavedash } = useWavedash();
 
   const { sortOrder, displayType } = leaderboardOptions ?? {};
@@ -64,6 +67,10 @@ export function useLeaderboard(
       .then((result) => {
         if (result.success) {
           setLeaderboard(result.data);
+          onLeaderboardLoadedCallbacks.current.forEach((callback) =>
+            callback(result.data),
+          );
+          onLeaderboardLoadedCallbacks.current = [];
         }
       })
       .finally(() => {
@@ -71,7 +78,25 @@ export function useLeaderboard(
       });
   }, [isRunningInWavedash, wavedash, leaderboardName, sortOrder, displayType]);
 
-  const leaderboardId = leaderboard?.id;
+  const waitForLeaderboardId = useCallback(async (): Promise<
+    Id<"leaderboards">
+  > => {
+    if (!isRunningInWavedash) {
+      return "" as Id<"leaderboards">;
+    }
+
+    if (leaderboard) {
+      return leaderboard.id;
+    }
+
+    return new Promise((resolve) => {
+      onLeaderboardLoadedCallbacks.current.push(
+        (loadedLeaderboard: Leaderboard) => {
+          resolve(loadedLeaderboard.id);
+        },
+      );
+    });
+  }, [isRunningInWavedash, leaderboard]);
 
   const submitScore = useCallback(
     async (
@@ -79,9 +104,11 @@ export function useLeaderboard(
       keepBest: boolean = true,
       ugcId?: Id<"userGeneratedContent">,
     ): Promise<UpsertedLeaderboardEntry | null> => {
-      if (!isRunningInWavedash || !leaderboardId) {
+      if (!isRunningInWavedash) {
         return null;
       }
+
+      const leaderboardId = await waitForLeaderboardId();
 
       const response = await wavedash.uploadLeaderboardScore(
         leaderboardId,
@@ -92,16 +119,18 @@ export function useLeaderboard(
 
       return response.success ? response.data : null;
     },
-    [isRunningInWavedash, leaderboardId, wavedash],
+    [isRunningInWavedash, waitForLeaderboardId, wavedash],
   );
 
-  const getEntryCount = useCallback((): number => {
-    if (!isRunningInWavedash || !leaderboardId) {
+  const getEntryCount = useCallback(async (): Promise<number> => {
+    if (!isRunningInWavedash) {
       return -1;
     }
 
+    const leaderboardId = await waitForLeaderboardId();
+
     return wavedash.getLeaderboardEntryCount(leaderboardId);
-  }, [isRunningInWavedash, leaderboardId, wavedash]);
+  }, [isRunningInWavedash, waitForLeaderboardId, wavedash]);
 
   const getEntries = useCallback(
     async (
@@ -109,9 +138,11 @@ export function useLeaderboard(
       count: number,
       friendsOnly?: boolean,
     ): Promise<LeaderboardEntries> => {
-      if (!isRunningInWavedash || !leaderboardId) {
+      if (!isRunningInWavedash) {
         return [];
       }
+
+      const leaderboardId = await waitForLeaderboardId();
 
       const response = await wavedash.listLeaderboardEntries(
         leaderboardId,
@@ -122,7 +153,7 @@ export function useLeaderboard(
 
       return response.success ? response.data : [];
     },
-    [isRunningInWavedash, leaderboardId, wavedash],
+    [isRunningInWavedash, waitForLeaderboardId, wavedash],
   );
 
   const getEntriesAroundCurrentUser = useCallback(
@@ -131,9 +162,11 @@ export function useLeaderboard(
       countBehind: number,
       friendsOnly?: boolean,
     ): Promise<LeaderboardEntries> => {
-      if (!isRunningInWavedash || !leaderboardId) {
+      if (!isRunningInWavedash) {
         return [];
       }
+
+      const leaderboardId = await waitForLeaderboardId();
 
       const response = await wavedash.listLeaderboardEntriesAroundUser(
         leaderboardId,
@@ -144,18 +177,20 @@ export function useLeaderboard(
 
       return response.success ? response.data : [];
     },
-    [isRunningInWavedash, leaderboardId, wavedash],
+    [isRunningInWavedash, waitForLeaderboardId, wavedash],
   );
 
   const getCurrentUserEntries =
     useCallback(async (): Promise<LeaderboardEntries> => {
-      if (!isRunningInWavedash || !leaderboardId) {
+      if (!isRunningInWavedash) {
         return [];
       }
 
+      const leaderboardId = await waitForLeaderboardId();
+
       const response = await wavedash.getMyLeaderboardEntries(leaderboardId);
       return response.success ? response.data : [];
-    }, [isRunningInWavedash, leaderboardId, wavedash]);
+    }, [isRunningInWavedash, waitForLeaderboardId, wavedash]);
 
   return {
     isLoading,
