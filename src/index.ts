@@ -1,6 +1,7 @@
 export * from "./achievements";
 export * from "./audio";
 export * from "./currentUser";
+export * from "./entitlements";
 export * from "./leaderboards";
 export * from "./stats";
 export * from "./state";

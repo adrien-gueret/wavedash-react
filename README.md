@@ -228,10 +228,14 @@ export function Hud() {
       <p>Coins: {coins}</p>
       <button onClick={openMenu}>Open menu</button>
       <button onClick={closeMenu}>Close menu</button>
-      <button onClick={() => {
-        const newState = addCoins(10);
-        console.log("New coin count:", newState.coins);
-      }}>+10 coins</button>
+      <button
+        onClick={() => {
+          const newState = addCoins(10);
+          console.log("New coin count:", newState.coins);
+        }}
+      >
+        +10 coins
+      </button>
     </div>
   );
 }
@@ -604,6 +608,101 @@ export function AchievementHandler() {
 
 - current unlocked state as `boolean | null`
 - `unlockAchievement(storeNow?)`
+
+### Entitlements
+
+Gate paid content and drive the Wavedash paywall flow.
+
+```tsx
+import { useEntitlement } from "wavedash-react";
+
+export function PremiumLevel() {
+  const [isEntitled, triggerPaywall] = useEntitlement("level-pack-2");
+
+  if (isEntitled === null) return <p>Checking access...</p>;
+
+  if (!isEntitled) {
+    return (
+      <button onClick={() => triggerPaywall()}>Unlock this content</button>
+    );
+  }
+
+  return <p>Enjoy your premium level!</p>;
+}
+```
+
+`useEntitlement(contentIdentifier)` returns a tuple:
+
+- current ownership state as `boolean | null` (`null` while it is being resolved)
+- `triggerPaywall()`: opens the Wavedash paywall and resolves to a `boolean` indicating whether the user now owns the content. If the user already owns it, it resolves to `true` immediately without showing the paywall.
+
+To check several items at once, use `useEntitlements()`:
+
+```tsx
+import { useEntitlements } from "wavedash-react";
+
+export function OwnedContent() {
+  const { isLoading, entitlements } = useEntitlements();
+
+  if (isLoading) return <p>Loading...</p>;
+
+  return (
+    <ul>
+      {entitlements.map((contentId) => (
+        <li key={contentId}>{contentId}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+`useEntitlements()` returns an object:
+
+- `isLoading`: `boolean`
+- `entitlements`: the list of owned content identifiers as `string[]`
+
+### Paid Assets
+
+`useEntitlement` only tells you what to display — it does not deliver the content. When your premium content is stored as remote files on Wavedash, `usePaidAsset` chains the whole flow for you: it makes sure the user owns the content (opening the paywall when needed), downloads the remote file, and reads its bytes back. The actual access control happens server-side during the download, so a tampered client can never obtain the bytes.
+
+```tsx
+import { usePaidAsset } from "wavedash-react";
+
+export function PremiumBoss() {
+  const { isEntitled, isLoading, url, error, load } = usePaidAsset(
+    "level-pack-2",
+    "level-pack-2/boss.png",
+    { mimeType: "image/png" },
+  );
+
+  if (error) return <p>Failed to load premium content</p>;
+
+  return url ? (
+    <img src={url} alt="Premium boss" />
+  ) : (
+    <button onClick={() => load()} disabled={isLoading}>
+      {isEntitled ? "Load" : "Unlock and load"}
+    </button>
+  );
+}
+```
+
+`usePaidAsset(contentIdentifier, filePath, options?)` accepts:
+
+- `contentIdentifier` (required): the entitlement that gates the file
+- `filePath` (required): the path of the remote file to download
+- `options.mimeType` (optional): when provided, a ready-to-use object URL is created from the downloaded bytes
+
+It returns an object:
+
+- `isEntitled`: current ownership state as `boolean | null`
+- `isLoading`: `boolean`, `true` while `load()` is running
+- `data`: the downloaded bytes as `Uint8Array | null`
+- `url`: an object URL as `string | null` (only created when `mimeType` is set)
+- `error`: the error object if the last load failed, `null` otherwise
+- `load()`: triggers the paywall if needed, downloads and reads the file, and resolves to a `boolean` indicating success
+
+The object URL is automatically revoked when the component unmounts or before a new one is created. For non-visual assets (JSON, binary data), omit `mimeType` and use `data` directly.
 
 ## TypeScript Support
 
