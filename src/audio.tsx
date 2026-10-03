@@ -8,8 +8,6 @@ import {
   useRef,
 } from "react";
 
-import { useWavedash } from "./WavedashProvider";
-
 export type AudioContextValue = {
   isAudioEnabled: boolean;
   soundsVolume: number;
@@ -53,13 +51,11 @@ export function AudioProvider({
   defaultSoundsVolume = 1,
   defaultMusicVolume = 1,
 }: AudioProviderProps) {
-  const { wavedash } = useWavedash();
   const [isAudioEnabled, setIsAudioEnabledState] = useState(false);
   const [soundsVolume, setSoundsVolumeState] = useState(defaultSoundsVolume);
   const [musicVolume, setMusicVolumeState] = useState(defaultMusicVolume);
   const currentMusicRef = useRef<HTMLAudioElement | null>(null);
   const shouldResumeMusicRef = useRef(false);
-  const isSyncingFromHostRef = useRef(false);
 
   const isAudioEnabledRef = useRef(isAudioEnabled);
   const soundsVolumeRef = useRef(soundsVolume);
@@ -70,16 +66,6 @@ export function AudioProvider({
     setIsAudioEnabledState(value);
   }, []);
 
-  const requestMuteOnHost = useCallback(
-    (muted: boolean): Promise<boolean> => {
-      if (!wavedash || isSyncingFromHostRef.current) {
-        return Promise.resolve(true);
-      }
-      return wavedash.requestMute(muted);
-    },
-    [wavedash],
-  );
-
   const toggleAudio = useCallback(
     async (force?: boolean) => {
       const previous = isAudioEnabledRef.current;
@@ -88,15 +74,9 @@ export function AudioProvider({
         return previous;
       }
       setAudioEnabledLocal(newValue);
-
-      const applied = await requestMuteOnHost(!newValue);
-      if (applied) {
-        setAudioEnabledLocal(newValue);
-        return newValue;
-      }
-      return previous;
+      return newValue;
     },
-    [requestMuteOnHost, setAudioEnabledLocal],
+    [setAudioEnabledLocal],
   );
 
   const setSoundsVolume = useCallback((value: number) => {
@@ -224,29 +204,10 @@ export function AudioProvider({
   }, [isAudioEnabled, musicVolume]);
 
   useEffect(() => {
-    if (!wavedash) {
-      return;
+    for (const audio of audioMap.values()) {
+      audio.muted = !isAudioEnabled;
     }
-
-    isSyncingFromHostRef.current = true;
-    wavedash.requestMute(true).finally(() => {
-      isSyncingFromHostRef.current = false;
-    });
-
-    const unsubscribe = wavedash.on(
-      wavedash.Events.MUTE_CHANGED,
-      ({ isMuted }) => {
-        isSyncingFromHostRef.current = true;
-        try {
-          setAudioEnabledLocal(!isMuted);
-        } finally {
-          isSyncingFromHostRef.current = false;
-        }
-      },
-    );
-
-    return unsubscribe;
-  }, [wavedash, setAudioEnabledLocal]);
+  }, [audioMap, isAudioEnabled]);
 
   return (
     <AudioContext

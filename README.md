@@ -414,20 +414,16 @@ Returns the created or updated leaderboard entry, or `null` if submission failed
 
 The library also exposes helpers to control sound effects and music from the assets preloaded in `WavedashProvider`.
 
-Sound effects and music are disabled by default. Enable them through `useAudio()` before calling `useSound()` or `useMusic()`.
+Sound effects and music are disabled by default. Enable them through `useAudio()` before calling `useSound()` or `useMusic()`. These controls only affect game audio. They neither read nor change the Wavedash site's mute setting, and site mute changes do not change the game's audio state.
 
 ### useAudio
 
 `useAudio()` gives access to the shared audio state and controls:
 
-- `areSoundsEnabled`
-- `isMusicEnabled`
-- `isAudioEnabled()`
+- `isAudioEnabled` (boolean)
 - `soundsVolume`
 - `musicVolume`
-- `toggleSounds(force?)`
-- `toggleMusic(force?)`
-- `toggleAudio(force?)`
+- `toggleAudio(force?)` (returns a promise resolving to the new game audio state)
 - `playSound(audioId, loop?)`
 - `stopSound(audioId)`
 - `playMusic(musicId)`
@@ -441,11 +437,8 @@ import { useAudio } from "wavedash-react";
 
 export function AudioSettings() {
   const {
-    areSoundsEnabled,
-    isMusicEnabled,
     isAudioEnabled,
-    toggleSounds,
-    toggleMusic,
+    toggleAudio,
     playSound,
     soundsVolume,
     musicVolume,
@@ -455,14 +448,11 @@ export function AudioSettings() {
 
   return (
     <div>
-      <button onClick={() => toggleSounds()}>
-        Sound effects: {areSoundsEnabled ? "on" : "off"}
-      </button>
-      <button onClick={() => toggleMusic()}>
-        Music: {isMusicEnabled ? "on" : "off"}
+      <button onClick={() => toggleAudio()}>
+        Game audio: {isAudioEnabled ? "on" : "off"}
       </button>
       <button onClick={() => playSound("click")}>Play click</button>
-      <p>Any audio enabled: {isAudioEnabled() ? "yes" : "no"}</p>
+      <p>Any audio enabled: {isAudioEnabled ? "yes" : "no"}</p>
       <button onClick={() => setSoundsVolume(0.5)}>
         SFX volume: {soundsVolume}
       </button>
@@ -481,18 +471,17 @@ import { useEffect } from "react";
 import { useAudio } from "wavedash-react";
 
 export function EnableAudioOnStart() {
-  const { toggleSounds, toggleMusic } = useAudio();
+  const { toggleAudio } = useAudio();
 
   useEffect(() => {
-    toggleSounds(true);
-    toggleMusic(true);
-  }, [toggleSounds, toggleMusic]);
+    toggleAudio(true);
+  }, [toggleAudio]);
 
   return null;
 }
 ```
 
-When music is disabled, the currently playing track is paused automatically. If it was paused by the toggle, it resumes automatically when music is re-enabled.
+When game audio is disabled, sound effects are silenced and the currently playing music track is paused automatically. If it was paused by the toggle, it resumes automatically when game audio is re-enabled. Game volume settings are preserved.
 
 ### useSound
 
