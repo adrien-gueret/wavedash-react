@@ -8,7 +8,10 @@
     "dev": "tsup --watch",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "publish:patch": "npm version patch && git push --follow-tags && npm publish",
+    "publish:minor": "npm version minor && git push --follow-tags && npm publish",
+    "publish:major": "npm version major && git push --follow-tags && npm publish"
   },
   "author": "",
   "license": "MIT",
